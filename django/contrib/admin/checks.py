@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+from inspect import getargspec
 from itertools import chain
 
 from django.contrib.admin.utils import get_fields_from_path, NotRelationField, flatten
@@ -660,8 +661,9 @@ class ModelAdminChecks(BaseModelAdminChecks):
             return []
 
     def _check_list_filter(self, cls, model):
-        if not isinstance(cls.list_filter, (list, tuple)):
-            return must_be('a list or tuple', option='list_filter', obj=cls, id='admin.E112')
+        if not isinstance(cls.list_filter, (list, tuple, dict)):
+            return must_be('a list, tuple, or dict', option='list_filter',
+                    obj=cls, id='admin.E112')
         else:
             return list(chain(*[
                 self._check_list_filter_item(cls, model, item, "list_filter[%d]" % index)
@@ -675,53 +677,107 @@ class ModelAdminChecks(BaseModelAdminChecks):
            'field__rel')
         2. ('field', SomeFieldListFilter) - a field-based list filter class
         3. SomeListFilter - a non-field list filter class
+        4. { 'class': SomeListFilter, 'field': 'field', ... } - a dict of list
+           filter options passed to the list filter class
         """
 
         from django.contrib.admin import ListFilter, FieldListFilter
+        errors = []
+        filter_options = {}
+        field = None
+        list_filter_class = None
+
+        if isinstance(item, dict):
+            # item is option 4, mutate it to conform to one of the other 3
+            # options
+            unrecognized_keys = set(item.keys()) - {'class', 'field', 'kwargs'}
+            if unrecognized_keys:
+                errors.append(checks.Error(
+                    "The value of '{0}' contains unrecognized keys: {1}.".format(
+                        label,
+                        ', '.join("'{0}'".format(k) for k in unrecognized_keys),
+                    ),
+                    hint=None,
+                    obj=cls,
+                    id='admin.E131',
+                ))
+
+            filter_options = item.get('kwargs', {})
+            field = item.get('field')
+            list_filter_class = item.get('class')
+
+            if field and list_filter_class:
+                item = (field, list_filter_class)
+            elif list_filter_class:
+                item = list_filter_class
+            elif field:
+                item = field
+            else:
+                item = None
+                errors.append(checks.Error(
+                    "The value of '{0}' must contain either a field name or a list filter class.".format(label),
+                    hint=None,
+                    obj=cls,
+                    id='admin.E129',
+                ))
 
         if callable(item) and not isinstance(item, models.Field):
             # If item is option 3, it should be a ListFilter...
-            if not issubclass(item, ListFilter):
-                return must_inherit_from(parent='ListFilter', option=label,
-                                         obj=cls, id='admin.E113')
+            list_filter_class = item
+            if not issubclass(list_filter_class, ListFilter):
+                errors.extend(must_inherit_from(parent='ListFilter',
+                                                option=label,
+                                                obj=cls,
+                                                id='admin.E113'))
             # ...  but not a FieldListFilter.
-            elif issubclass(item, FieldListFilter):
-                return [
-                    checks.Error(
-                        "The value of '%s' must not inherit from 'FieldListFilter'." % label,
-                        hint=None,
-                        obj=cls,
-                        id='admin.E114',
-                    )
-                ]
-            else:
-                return []
+            elif issubclass(list_filter_class, FieldListFilter):
+                errors.append(checks.Error(
+                    "The value of '%s' must not inherit from 'FieldListFilter'." % label,
+                    hint=None,
+                    obj=cls,
+                    id='admin.E114',
+                ))
         elif isinstance(item, (tuple, list)):
             # item is option #2
             field, list_filter_class = item
             if not issubclass(list_filter_class, FieldListFilter):
-                return must_inherit_from(parent='FieldListFilter', option='%s[1]' % label,
-                                         obj=cls, id='admin.E115')
-            else:
-                return []
-        else:
+                errors.extend(must_inherit_from(parent='FieldListFilter',
+                                                option='%s[1]' % label,
+                                                obj=cls,
+                                                id='admin.E115'))
+        elif item:
             # item is option #1
             field = item
+            list_filter_class = FieldListFilter
 
             # Validate the field string
             try:
                 get_fields_from_path(model, field)
             except (NotRelationField, FieldDoesNotExist):
-                return [
-                    checks.Error(
-                        "The value of '%s' refers to '%s', which does not refer to a Field." % (label, field),
-                        hint=None,
-                        obj=cls,
-                        id='admin.E116',
-                    )
-                ]
-            else:
-                return []
+                errors.append(checks.Error(
+                    "The value of '%s' refers to '%s', which does not refer to a Field." % (label, field),
+                    hint=None,
+                    obj=cls,
+                    id='admin.E116',
+                ))
+
+        if list_filter_class and filter_options:
+            standard_args = set(['self', 'field', 'request', 'params', 'model',
+                'model_admin', 'field_path'])
+            kwargs = set(getargspec(list_filter_class.__init__)[0]) - standard_args
+            unrecognized_keys = set(filter_options.keys()) - kwargs
+            if unrecognized_keys:
+                errors.append(checks.Error(
+                    "The value of '{0}' contains unrecognized kwargs: {1}.".format(
+                        label,
+                        ', '.join("'{0}'".format(k) for k in unrecognized_keys),
+                    ),
+                    hint=None,
+                    obj=cls,
+                    id='admin.E130',
+                ))
+
+        return errors
 
     def _check_list_select_related(self, cls, model):
         """ Check that list_select_related is a boolean, a list or a tuple. """

@@ -176,7 +176,7 @@ with the admin site:
 * **admin.E109**: The value of ``list_display[n]`` must not be a ManyToManyField.
 * **admin.E110**: The value of ``list_display_links`` must be a list, a tuple, or None.
 * **admin.E111**: The value of ``list_display_links[n]`` refers to ``<label>``, which is not defined in ``list_display``.
-* **admin.E112**: The value of ``list_filter`` must be a list or tuple.
+* **admin.E112**: The value of ``list_filter`` must be a list, tuple, or dict.
 * **admin.E113**: The value of ``list_filter[n]`` must inherit from ``ListFilter``.
 * **admin.E114**: The value of ``list_filter[n]`` must not inherit from ``FieldListFilter``.
 * **admin.E115**: The value of ``list_filter[n][1]`` must inherit from ``FieldListFilter``.
@@ -193,6 +193,9 @@ with the admin site:
 * **admin.E126**: The value of ``search_fields`` must be a list or tuple.
 * **admin.E127**: The value of ``date_hierarchy`` refers to ``<field name>``, which is not an attribute of ``<model>``.
 * **admin.E128**: The value of ``date_hierarchy`` must be a DateField or DateTimeField.
+* **admin.E129**: The value of ``list_filter[n]`` must contain either a field name or a list filter class.
+* **admin.E130**: The value of ``list_filter[n]`` contains unrecognized kwargs: ``<key1>``, ``<key2>``.
+* **admin.E131**: The value of ``list_filter[n]`` contains unrecognized keys: ``<key1>``, ``<key2>``.
 
 InlineModelAdmin
 ~~~~~~~~~~~~~~~~

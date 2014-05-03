@@ -104,25 +104,41 @@ class ChangeList(object):
         filter_specs = []
         if self.list_filter:
             for list_filter in self.list_filter:
-                if callable(list_filter):
+                filter_options = {}
+                if isinstance(list_filter, dict):
+                    filter_options = list_filter.get('kwargs', {})
+                    field = list_filter.get('field')
+                    field_list_filter_class = list_filter.get('class')
+
+                    if field and field_list_filter_class:
+                        _list_filter = (field, field_list_filter_class)
+                    elif field_list_filter_class:
+                        _list_filter = field_list_filter_class
+                    else:
+                        _list_filter = field
+                else:
+                    _list_filter = list_filter
+
+                if callable(_list_filter):
                     # This is simply a custom list filter class.
-                    spec = list_filter(request, lookup_params,
-                        self.model, self.model_admin)
+                    spec = _list_filter(request, lookup_params,
+                        self.model, self.model_admin, **filter_options)
                 else:
                     field_path = None
-                    if isinstance(list_filter, (tuple, list)):
+                    if isinstance(_list_filter, (tuple, list)):
                         # This is a custom FieldListFilter class for a given field.
-                        field, field_list_filter_class = list_filter
+                        field, field_list_filter_class = _list_filter
                     else:
                         # This is simply a field name, so use the default
                         # FieldListFilter class that has been registered for
                         # the type of the given field.
-                        field, field_list_filter_class = list_filter, FieldListFilter.create
+                        field, field_list_filter_class = _list_filter, FieldListFilter.create
                     if not isinstance(field, models.Field):
                         field_path = field
                         field = get_fields_from_path(self.model, field_path)[-1]
                     spec = field_list_filter_class(field, request, lookup_params,
-                        self.model, self.model_admin, field_path=field_path)
+                        self.model, self.model_admin, field_path=field_path,
+                        **filter_options)
                     # Check if we need to use distinct()
                     use_distinct = (use_distinct or
                                     lookup_needs_distinct(self.lookup_opts,

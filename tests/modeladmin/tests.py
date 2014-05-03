@@ -10,7 +10,7 @@ from django.contrib.admin.sites import AdminSite
 from django.contrib.admin.widgets import AdminDateWidget, AdminRadioSelect
 from django.contrib.admin.validation import ModelAdminValidator
 from django.contrib.admin import (SimpleListFilter,
-     BooleanFieldListFilter)
+     BooleanFieldListFilter, FieldListFilter)
 from django.core.checks import Error
 from django.core.exceptions import ImproperlyConfigured
 from django.forms.models import BaseModelFormSet
@@ -1037,8 +1037,65 @@ class ListFilterTests(CheckTestCase):
 
         self.assertIsInvalid(
             ValidationTestModelAdmin, ValidationTestModel,
-            "The value of 'list_filter' must be a list or tuple.",
+            "The value of 'list_filter' must be a list, tuple, or dict.",
             'admin.E112')
+
+    def test_list_filter_dict_validation_missing_keys(self):
+        class ValidationTestModelAdmin(ModelAdmin):
+            list_filter = ({},)
+
+        self.assertIsInvalid(
+            ValidationTestModelAdmin, ValidationTestModel,
+            "The value of 'list_filter[0]' must contain either a field name or a list filter class.",
+            'admin.E129')
+
+    def test_list_filter_dict_validation_unrecognized_kwargs(self):
+        class ValidationTestModelAdmin(ModelAdmin):
+            list_filter = (
+                {
+                    'field': 'name',
+                    'kwargs': {
+                        'foo': 'bar',
+                    },
+                },
+            )
+
+        self.assertIsInvalid(
+            ValidationTestModelAdmin, ValidationTestModel,
+            "The value of 'list_filter[0]' contains unrecognized kwargs: 'foo'.",
+            'admin.E130')
+
+    def test_list_filter_dict_validation_unrecognized_keys(self):
+        class ValidationTestModelAdmin(ModelAdmin):
+            list_filter = (
+                {
+                    'field': 'name',
+                    'foo': 'bar',
+                },
+            )
+
+        self.assertIsInvalid(
+            ValidationTestModelAdmin, ValidationTestModel,
+            "The value of 'list_filter[0]' contains unrecognized keys: 'foo'.",
+            'admin.E131')
+
+    def test_list_filter_dict_validation_recognized_custom_keys(self):
+        class CustomListFilter(FieldListFilter):
+            def __init__(self, foo=None, *args, **kwargs):
+                super(CustomListFilter, self).__init__(*args, **kwargs)
+
+        class ValidationTestModelAdmin(ModelAdmin):
+            list_filter = (
+                {
+                    'field': 'name',
+                    'class': CustomListFilter,
+                    'kwargs': {
+                        'foo': 'bar',
+                    },
+                },
+            )
+
+        self.assertIsValid(ValidationTestModelAdmin, ValidationTestModel)
 
     def test_missing_field(self):
         class ValidationTestModelAdmin(ModelAdmin):

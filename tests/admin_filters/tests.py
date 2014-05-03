@@ -133,6 +133,8 @@ class BookAdminWithTupleBooleanFilter(BookAdmin):
 class BookAdminWithUnderscoreLookupAndTuple(BookAdmin):
     list_filter = ('year', ('author__email', AllValuesFieldListFilter), 'contributors', 'is_best_seller', 'date_registered', 'no')
 
+class BookAdminWithDictBooleanFilter(BookAdmin):
+    list_filter = ('year', 'author', 'contributors', {'field': 'is_best_seller', 'class': BooleanFieldListFilter}, 'date_registered', 'no')
 
 class DecadeFilterBookAdmin(ModelAdmin):
     list_filter = ('author', DecadeListFilterWithTitleAndParameter)
@@ -470,6 +472,10 @@ class ListFiltersTests(TestCase):
 
     def test_booleanfieldlistfilter_tuple(self):
         modeladmin = BookAdminWithTupleBooleanFilter(Book, site)
+        self.verify_booleanfieldlistfilter(modeladmin)
+
+    def test_booleanfieldlistfilter_dict(self):
+        modeladmin = BookAdminWithDictBooleanFilter(Book, site)
         self.verify_booleanfieldlistfilter(modeladmin)
 
     def verify_booleanfieldlistfilter(self, modeladmin):

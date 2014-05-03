@@ -885,6 +885,25 @@ subclass::
         The ``FieldListFilter`` API is considered internal and might be
         changed.
 
+    * a dictionary, whose keys ``class``, ``field``, and ``kwargs`` correspond
+      to the list filter class, the field name (both as described in the types
+      above), and the keyword arguments passed to the list filter class's
+      constructor, respectively. For example::
+
+          class PersonAdmin(admin.ModelAdmin):
+              list_filter = (
+                  {
+                      'class': admin.BooleanFieldListFilter,
+                      'field': 'is_staff',
+                      'kwargs': {
+                          'default': False,
+                      },
+                  }
+              )
+
+      At least one of ``field`` and ``class`` keys must be included. The
+      ``kwargs`` key is optional.
+
     It is possible to specify a custom template for rendering a list filter::
 
         class FilterWithCustomTemplate(admin.SimpleListFilter):

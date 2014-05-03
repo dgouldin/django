@@ -434,6 +434,15 @@ class BaseModelAdmin(six.with_metaclass(forms.MediaDefiningClass)):
                 valid_lookups.append(filter_item.parameter_name)
             elif isinstance(filter_item, (list, tuple)):
                 valid_lookups.append(filter_item[0])
+            elif isinstance(filter_item, dict):
+                filter_class = filter_item.get('class')
+                filter_field = filter_item.get('field')
+                if filter_field:
+                    valid_lookups.append(filter_field)
+                elif isinstance(filter_class, type) and issubclass(filter_class, SimpleListFilter):
+                    valid_lookups.append(filter_class.parameter_name)
+                else:
+                    valid_lookups.append(filter_item)
             else:
                 valid_lookups.append(filter_item)
         return clean_lookup in valid_lookups
