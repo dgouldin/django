@@ -888,7 +888,9 @@ subclass::
     * a dictionary, whose keys ``class``, ``field``, and ``kwargs`` correspond
       to the list filter class, the field name (both as described in the types
       above), and the keyword arguments passed to the list filter class's
-      constructor, respectively. For example::
+      constructor, respectively. All of the list filter classes provided by
+      Django accept a ``default`` keyword argument indicating the value to
+      filter on when none is provided by the url querystring. For example::
 
           class PersonAdmin(admin.ModelAdmin):
               list_filter = (

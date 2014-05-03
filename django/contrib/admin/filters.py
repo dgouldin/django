@@ -21,7 +21,7 @@ class ListFilter(object):
     title = None  # Human-readable title to appear in the right sidebar.
     template = 'admin/filter.html'
 
-    def __init__(self, request, params, model, model_admin):
+    def __init__(self, request, params, model, model_admin, default=None):
         # This dictionary will eventually contain the request's query string
         # parameters actually used by this filter.
         self.used_parameters = {}
@@ -29,6 +29,7 @@ class ListFilter(object):
             raise ImproperlyConfigured(
                 "The list filter '%s' does not specify "
                 "a 'title'." % self.__class__.__name__)
+        self.default = default
 
     def has_output(self):
         """
@@ -60,9 +61,9 @@ class SimpleListFilter(ListFilter):
     # The parameter that should be used in the query string for that filter.
     parameter_name = None
 
-    def __init__(self, request, params, model, model_admin):
+    def __init__(self, request, params, model, model_admin, default=None):
         super(SimpleListFilter, self).__init__(
-            request, params, model, model_admin)
+            request, params, model, model_admin, default=default)
         if self.parameter_name is None:
             raise ImproperlyConfigured(
                 "The list filter '%s' does not specify "
@@ -82,9 +83,9 @@ class SimpleListFilter(ListFilter):
         """
         Returns the value (in string format) provided in the request's
         query string for this filter, if any. If the value wasn't provided then
-        returns None.
+        returns either the default value or None if there isn't one.
         """
-        return self.used_parameters.get(self.parameter_name, None)
+        return self.used_parameters.get(self.parameter_name, self.default)
 
     def lookups(self, request, model_admin):
         """
@@ -117,16 +118,20 @@ class FieldListFilter(ListFilter):
     _field_list_filters = []
     _take_priority_index = 0
 
-    def __init__(self, field, request, params, model, model_admin, field_path):
+    def __init__(self, field, request, params, model, model_admin, field_path,
+            default=None):
         self.field = field
         self.field_path = field_path
         self.title = getattr(field, 'verbose_name', field_path)
         super(FieldListFilter, self).__init__(
-            request, params, model, model_admin)
+            request, params, model, model_admin, default=default)
         for p in self.expected_parameters():
             if p in params:
                 value = params.pop(p)
                 self.used_parameters[p] = prepare_lookup_value(p, value)
+
+        if self.default and not self.used_parameters:
+            self.used_parameters[self.lookup_kwarg] = self.default
 
     def has_output(self):
         return True
@@ -159,7 +164,8 @@ class FieldListFilter(ListFilter):
 
 
 class RelatedFieldListFilter(FieldListFilter):
-    def __init__(self, field, request, params, model, model_admin, field_path):
+    def __init__(self, field, request, params, model, model_admin, field_path,
+            default=None):
         other_model = get_model_from_relation(field)
         if hasattr(field, 'rel'):
             rel_name = field.rel.get_related_field().name
@@ -171,7 +177,8 @@ class RelatedFieldListFilter(FieldListFilter):
         self.lookup_val_isnull = request.GET.get(self.lookup_kwarg_isnull)
         self.lookup_choices = field.get_choices(include_blank=False)
         super(RelatedFieldListFilter, self).__init__(
-            field, request, params, model, model_admin, field_path)
+            field, request, params, model, model_admin, field_path,
+            default=default)
         if hasattr(field, 'verbose_name'):
             self.lookup_title = field.verbose_name
         else:
@@ -223,13 +230,14 @@ FieldListFilter.register(lambda f: (
 
 
 class BooleanFieldListFilter(FieldListFilter):
-    def __init__(self, field, request, params, model, model_admin, field_path):
+    def __init__(self, field, request, params, model, model_admin, field_path,
+            default=None):
         self.lookup_kwarg = '%s__exact' % field_path
         self.lookup_kwarg2 = '%s__isnull' % field_path
         self.lookup_val = request.GET.get(self.lookup_kwarg, None)
         self.lookup_val2 = request.GET.get(self.lookup_kwarg2, None)
         super(BooleanFieldListFilter, self).__init__(field,
-            request, params, model, model_admin, field_path)
+            request, params, model, model_admin, field_path, default=default)
 
     def expected_parameters(self):
         return [self.lookup_kwarg, self.lookup_kwarg2]
@@ -260,11 +268,13 @@ FieldListFilter.register(lambda f: isinstance(f,
 
 
 class ChoicesFieldListFilter(FieldListFilter):
-    def __init__(self, field, request, params, model, model_admin, field_path):
+    def __init__(self, field, request, params, model, model_admin, field_path,
+            default=None):
         self.lookup_kwarg = '%s__exact' % field_path
         self.lookup_val = request.GET.get(self.lookup_kwarg)
         super(ChoicesFieldListFilter, self).__init__(
-            field, request, params, model, model_admin, field_path)
+            field, request, params, model, model_admin, field_path,
+            default=default)
 
     def expected_parameters(self):
         return [self.lookup_kwarg]
@@ -287,7 +297,8 @@ FieldListFilter.register(lambda f: bool(f.choices), ChoicesFieldListFilter)
 
 
 class DateFieldListFilter(FieldListFilter):
-    def __init__(self, field, request, params, model, model_admin, field_path):
+    def __init__(self, field, request, params, model, model_admin, field_path,
+            default=None):
         self.field_generic = '%s__' % field_path
         self.date_params = dict((k, v) for k, v in params.items()
                                 if k.startswith(self.field_generic))
@@ -331,7 +342,8 @@ class DateFieldListFilter(FieldListFilter):
             }),
         )
         super(DateFieldListFilter, self).__init__(
-            field, request, params, model, model_admin, field_path)
+            field, request, params, model, model_admin, field_path,
+            default=default)
 
     def expected_parameters(self):
         return [self.lookup_kwarg_since, self.lookup_kwarg_until]
@@ -353,7 +365,8 @@ FieldListFilter.register(
 # if a field is eligible to use the BooleanFieldListFilter, that'd be much
 # more appropriate, and the AllValuesFieldListFilter won't get used for it.
 class AllValuesFieldListFilter(FieldListFilter):
-    def __init__(self, field, request, params, model, model_admin, field_path):
+    def __init__(self, field, request, params, model, model_admin, field_path,
+            default=None):
         self.lookup_kwarg = field_path
         self.lookup_kwarg_isnull = '%s__isnull' % field_path
         self.lookup_val = request.GET.get(self.lookup_kwarg, None)
@@ -372,7 +385,8 @@ class AllValuesFieldListFilter(FieldListFilter):
                                .order_by(field.name)
                                .values_list(field.name, flat=True))
         super(AllValuesFieldListFilter, self).__init__(
-            field, request, params, model, model_admin, field_path)
+            field, request, params, model, model_admin, field_path,
+            default=default)
 
     def expected_parameters(self):
         return [self.lookup_kwarg, self.lookup_kwarg_isnull]

@@ -1079,6 +1079,19 @@ class ListFilterTests(CheckTestCase):
             "The value of 'list_filter[0]' contains unrecognized keys: 'foo'.",
             'admin.E131')
 
+    def test_list_filter_dict_validation_with_default_value(self):
+        class ValidationTestModelAdmin(ModelAdmin):
+            list_filter = (
+                {
+                    'field': 'name',
+                    'kwargs': {
+                        'default': True,
+                    },
+                },
+            )
+
+        self.assertIsValid(ValidationTestModelAdmin, ValidationTestModel)
+
     def test_list_filter_dict_validation_recognized_custom_keys(self):
         class CustomListFilter(FieldListFilter):
             def __init__(self, foo=None, *args, **kwargs):

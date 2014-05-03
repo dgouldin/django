@@ -136,6 +136,22 @@ class BookAdminWithUnderscoreLookupAndTuple(BookAdmin):
 class BookAdminWithDictBooleanFilter(BookAdmin):
     list_filter = ('year', 'author', 'contributors', {'field': 'is_best_seller', 'class': BooleanFieldListFilter}, 'date_registered', 'no')
 
+class BookAdminWithDictDefaultBooleanFilter(BookAdmin):
+    list_filter = (
+        'year',
+        'author',
+        'contributors',
+        {
+            'field': 'is_best_seller',
+            'class': BooleanFieldListFilter,
+            'kwargs': {
+                'default': True,
+            },
+        },
+        'date_registered',
+        'no',
+    )
+
 class DecadeFilterBookAdmin(ModelAdmin):
     list_filter = ('author', DecadeListFilterWithTitleAndParameter)
     ordering = ('-id',)
@@ -477,6 +493,29 @@ class ListFiltersTests(TestCase):
     def test_booleanfieldlistfilter_dict(self):
         modeladmin = BookAdminWithDictBooleanFilter(Book, site)
         self.verify_booleanfieldlistfilter(modeladmin)
+
+    def test_booleanlistfilter_dict_with_default(self):
+        modeladmin = BookAdminWithDictDefaultBooleanFilter(Book, site)
+        request = self.request_factory.get('/')
+        changelist = self.get_changelist(request, Book, modeladmin)
+
+        # Make sure the correct queryset is returned
+        queryset = changelist.get_queryset(request)
+        self.assertEqual(list(queryset), [self.gipsy_book, self.djangonaut_book])
+
+        request = self.request_factory.get('/', {'is_best_seller__exact': 0})
+        changelist = self.get_changelist(request, Book, modeladmin)
+
+        # Make sure the correct queryset is returned
+        queryset = changelist.get_queryset(request)
+        self.assertEqual(list(queryset), [self.bio_book])
+
+        request = self.request_factory.get('/', {'is_best_seller__exact': 1})
+        changelist = self.get_changelist(request, Book, modeladmin)
+
+        # Make sure the correct queryset is returned
+        queryset = changelist.get_queryset(request)
+        self.assertEqual(list(queryset), [self.gipsy_book, self.djangonaut_book])
 
     def verify_booleanfieldlistfilter(self, modeladmin):
         request = self.request_factory.get('/')
